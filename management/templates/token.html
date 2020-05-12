@@ -1,0 +1,24 @@
+{{define "tokens"}}
+{{ $tokenlength := len .TokenList }}
+  {{ if gt $tokenlength 0 }}
+    <h3 class="ui center aligned header">Tokens</h3>
+    <div class="ui divided list">
+    {{ range .TokenList }}
+      <div class="item">
+        <div class="right floated content">
+          <form class="ui content" method="POST">
+            <input type="hidden" name="action" value="deletetoken">
+            <input type="hidden" name="token" value="{{ .Token }}">
+            <div class="ui red button" onclick="SubmitForm(this);">Delete</div>
+          </form>
+        </div>
+        <i class="large file outline middle aligned icon"></i>
+        <div class="content">
+          <a class="header">{{ .Token }}</a>
+          <div class="description">{{ .Created }}</div>
+        </div>
+      </div>
+    {{ end }}
+    </div>
+  {{ end }}
+{{ end }}

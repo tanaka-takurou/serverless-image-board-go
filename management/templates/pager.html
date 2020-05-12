@@ -1,0 +1,66 @@
+{{define "pagertag"}}
+{{ $length := len .PageList }} {{ if gt $length 0 }}
+{{ $curr := .Page }}
+{{ $prev := sub .Page 1 }}
+{{ $next := add .Page 1 }}
+    <div class="ui center aligned basic segment">
+      <div aria-label="Pagination Navigation" role="navigation" class="ui pagination menu">
+{{ if gt $length 1 }}
+        <a
+          aria-current="false"
+          aria-disabled="false"
+          tabindex="0"
+          value="1"
+          aria-label="Previous item"
+          type="prevItem"
+          class="item"
+{{ if gt $curr 1 }}
+           href="/?page={{ $prev }}"
+{{ end }}
+          >
+          ⟨
+        </a>
+{{ end }}
+{{ range .PageList }}
+        <a
+{{ if eq $curr . }}
+          aria-current="true"
+{{ end }}
+{{ if ne $curr . }}
+          aria-current="false"
+{{ end }}
+          aria-disabled="false"
+          tabindex="0"
+          value="{{ . }}"
+          type="pageItem"
+{{ if eq $curr . }}
+          class="active item"
+{{ end }}
+{{ if ne $curr . }}
+          class="item"
+          href="/?page={{ . }}"
+{{ end }}
+          >
+          {{ . }}
+        </a>
+{{ end }}
+{{ if gt $length 1 }}
+        <a
+          aria-current="false"
+          aria-disabled="false"
+          tabindex="0"
+          value="{{ $next }}"
+          aria-label="Next item"
+          type="nextItem"
+          class="item"
+{{ if lt $curr $length }}
+          href="/?page={{ $next }}"
+{{ end }}
+          >
+          ⟩
+        </a>
+{{ end }}
+      </div>
+    </div>
+{{ end }}
+{{ end }}

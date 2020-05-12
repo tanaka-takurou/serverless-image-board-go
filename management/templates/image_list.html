@@ -1,0 +1,58 @@
+{{define "contents"}}
+{{ $imglength := len .ImgList }}
+  {{ if gt $imglength 0 }}
+    <h3 class="ui center aligned header">Imgs</h3>
+    <div class="ui divided list">
+    {{ range .ImgList }}
+      <div class="item">
+        <div class="right floated content">
+          <form class="ui content" method="POST">
+            <input type="hidden" name="action" value="updateimg">
+            <input type="hidden" name="img_id" value="{{ .Img_Id }}">
+            {{ if eq .Status 0 }}
+            <input type="hidden" name="status" value="1">
+            <div class="ui red button" onclick="SubmitForm(this)">Hide</div>
+            {{ else }}
+            <input type="hidden" name="status" value="0">
+            <div class="ui green button" onclick="SubmitForm(this)">Show</div>
+            {{ end }}
+          </form>
+        </div>
+        <i class="large clipboard outline middle aligned icon"></i>
+        <div class="content">
+          <a class="header" href="{{ .Url }}" target="_blank">{{ .Url }}</a>
+        </div>
+      </div>
+    {{ end }}
+    </div>
+  {{ end }}
+    <div class="ui primary button" onclick="OpenModal();">
+      Upload
+    </div>
+{{template "tokens" .}}
+    <div class="ui dimmer modals page transition hidden">
+      <div class="ui large modal transition hidden">
+        <form class="ui large modal" method="POST" style="left: auto !important;">
+          <i class="close icon"></i>
+          <div class="header">
+            New Image
+          </div>
+          <div class="content">
+            <div class="ui form">
+              <div class="field">
+                <label>Image File</label>
+                <div class="ui input">
+                  <input id="image" type="file" name="image" accept="image/*">
+                </div>
+              </div>
+            </div>
+          </div>
+          <input type="hidden" name="action" value="createimg">
+          <div class="actions">
+            <div class="ui button" onclick="CloseModal();">Cancel</div>
+            <div class="ui green button" onclick="UploadImage(this);">Submit</div>
+          </div>
+        </form>
+      </div>
+    </div>
+{{ end }}

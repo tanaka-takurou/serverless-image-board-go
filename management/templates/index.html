@@ -1,0 +1,19 @@
+{{define "base"}}
+<!doctype html>
+<html>
+{{template "headtag" .}}
+  <body>
+    <div class="ui fixed inverted menu">
+      <div class="ui container">
+        <a href="/" class="item">Top</a>
+      </div>
+    </div>
+    <div class="main ui container">
+    <h1 class="ui center aligned header">Sample Image Uploader</h1>
+{{template "contents" .}}
+    </div>
+{{template "pagertag" .}}
+{{template "foottag" .}}
+  </body>
+</html>
+{{ end }}
