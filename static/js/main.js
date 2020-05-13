@@ -72,25 +72,38 @@ function toBase64 (file) {
     reader.onerror = error => reject(error);
   });
 }
-function onConverted (filename, token, url) {
+function onConverted () {
   return function(v) {
-    const data = {action: 'uploadimg', filename: filename, filedata: v, token: token};
-    $.ajax({
-      type:          'POST',
-      dataType:      'json',
-      contentType:   'application/json',
-      scriptCharset: 'utf-8',
-      data:          JSON.stringify(data),
-      url:           url
-    })
-    .always(function() {
-      window.setTimeout(() => location.reload(true), 1000);
-    });
+    App.imgdata = v;
+    $('#preview').attr('src', v);
   }
 }
 function UploadImage(elm, url) {
-  $(elm).addClass("disabled");
-  const file = $('#image').prop('files')[0];
-  toBase64(file).then(onConverted(file.name, App.token, url));
+  if (!!App.imgdata) {
+    $(elm).addClass("disabled");
+    putImage(url);
+  }
 }
-var App = { token: '' };
+function putImage(url) {
+  const file = $('#image').prop('files')[0];
+  const data = {action: 'uploadimg', filename: file.name, filedata: App.imgdata, token: App.token};
+  $.ajax({
+    type:          'POST',
+    dataType:      'json',
+    contentType:   'application/json',
+    scriptCharset: 'utf-8',
+    data:          JSON.stringify(data),
+    url:           url
+  })
+  .fail(function(e) {
+    console.log(e);
+  })
+  .always(function() {
+    window.setTimeout(() => location.reload(true), 1000);
+  });
+}
+function ChangeImage () {
+  const file = $('#image').prop('files')[0];
+  toBase64(file).then(onConverted());
+}
+var App = { token: '', imgdata: null };
