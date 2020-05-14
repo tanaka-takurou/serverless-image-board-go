@@ -36,5 +36,5 @@ for i in ${FILEARY[@]}; do
   fi
 done
 
-cat ${TMP_FILE} | awk '{printf $0}' > ${TARGET_FILE}
+cat ${TMP_FILE} | awk '{printf("%s",$0)}' > ${TARGET_FILE}
 rm ${TMP_FILE}
