@@ -11,6 +11,9 @@ h3.ui.center.header {
   margin-top: 2em;
   padding: 2em 0em;
 }
+.ui.segment > a > img {
+  width: 100%;
+}
 .ui.footer.segment {
   margin: 5em 0em 0em;
   padding: 5em 0em;

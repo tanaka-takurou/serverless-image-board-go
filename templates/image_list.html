@@ -2,18 +2,17 @@
 {{ $imglength := len .ImgList }}
   {{ if gt $imglength 0 }}
     <div class="ui unstackable items">
-      {{ range .ImgList }}
-      <div class="item">
-        <div class="image">
-          <a class="header" href="{{ .Url }}">
-            <img src="{{ .Url }}">
-          </a>
+      <div class="ui three column grid">
+        {{ range .ImgList }}
+        <div class="column">
+          <div class="ui segment">
+            <a href="{{ .Url }}">
+              <img src="{{ .Url }}">
+            </a>
+          </div>
         </div>
-        <div class="content">
-          <a class="header" href="{{ .Url }}">{{ .Img_Id }}</a>
-        </div>
+        {{ end }}
       </div>
-      {{ end }}
     </div>
   {{ end }}
     <div class="ui primary button" onclick="OpenModal({{ .Api }});">
