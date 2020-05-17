@@ -46,6 +46,7 @@ const bucketName       string = "image-upload"
 const bucketRegion     string = "ap-northeast-1"
 const bucketPath       string = "img"
 const layout           string = "2006-01-02 15:04"
+const layout2          string = "20060102150405"
 
 func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (Response, error) {
 	var jsonBytes []byte
@@ -287,6 +288,7 @@ func deleteToken(token string) error {
 }
 
 func uploadImage(filename string, filedata string) error {
+	t := time.Now()
 	b64data := filedata[strings.IndexByte(filedata, ',')+1:]
 	data, err := base64.StdEncoding.DecodeString(b64data)
 	if err != nil {
@@ -315,11 +317,12 @@ func uploadImage(filename string, filedata string) error {
 		log.Print(err)
 		return err
 	}
+	filename_ := string([]rune(filename)[:(len(filename) - len(extension))]) + t.Format(layout2) + extension
 	uploader := s3manager.NewUploader(sess)
 	_, err = uploader.Upload(&s3manager.UploadInput{
 		ACL: aws.String("public-read"),
 		Bucket: aws.String(bucketName),
-		Key: aws.String(bucketPath + "/" + filename),
+		Key: aws.String(bucketPath + "/" + filename_),
 		Body: bytes.NewReader(data),
 		ContentType: aws.String(contentType),
 	})
@@ -327,7 +330,7 @@ func uploadImage(filename string, filedata string) error {
 		log.Print(err)
 		return err
 	}
-	putImg("https://" + bucketName + ".s3-" + bucketRegion + ".amazonaws.com/" + bucketPath + "/" + filename)
+	putImg("https://" + bucketName + ".s3-" + bucketRegion + ".amazonaws.com/" + bucketPath + "/" + filename_)
 	return nil
 }
 
