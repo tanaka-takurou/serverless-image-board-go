@@ -8,6 +8,7 @@ import (
 	"strings"
 	"strconv"
 	"context"
+	"io/ioutil"
 	"path/filepath"
 	"encoding/json"
 	"encoding/base64"
@@ -38,31 +39,36 @@ type TokenResponse struct {
 	Token     string `json:"token"`
 }
 
+type ConstantData struct {
+	ImgTableName   string `json:"imgTableName"`
+	TokenTableName string `json:"tokenTableName"`
+	BucketName     string `json:"bucketName"`
+}
+
 type Response events.APIGatewayProxyResponse
 
-const imgTableName     string = "img"
-const tokenTableName   string = "token"
-const bucketName       string = "image-upload"
-const bucketRegion     string = "ap-northeast-1"
-const bucketPath       string = "img"
-const layout           string = "2006-01-02 15:04"
-const layout2          string = "20060102150405"
+const bucketRegion string = "ap-northeast-1"
+const layout       string = "2006-01-02 15:04"
+const layout2      string = "20060102150405"
 
 func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (Response, error) {
 	var jsonBytes []byte
 	var err error
 	d := make(map[string]string)
 	json.Unmarshal([]byte(request.Body), &d)
+	jsonString, _ := ioutil.ReadFile("constant/constant.json")
+	constant := new(ConstantData)
+	json.Unmarshal(jsonString, constant)
 	if v, ok := d["action"]; ok {
 		switch v {
 		case "uploadimg" :
 			log.Print("Upload Img.")
 			if t, ok := d["token"]; ok {
-				if checkToken(t) {
+				if checkToken(constant.TokenTableName, t) {
 					if v, ok := d["filename"]; ok {
 						if w, ok := d["filedata"]; ok {
-							err = uploadImage(v, w)
-							deleteToken(t)
+							err = uploadImage(constant.ImgTableName, constant.BucketName, v, w)
+							deleteToken(constant.TokenTableName, t)
 						}
 					}
 				}
@@ -70,7 +76,7 @@ func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 		case "puttoken" :
 			hash, err := bcrypt.GenerateFromPassword([]byte("salt2"), bcrypt.DefaultCost)
 			if err == nil {
-				err = putToken(string(hash))
+				err = putToken(constant.TokenTableName, string(hash))
 				if err == nil {
 					jsonBytes, err = json.Marshal(TokenResponse{Token:string(hash)})
 				}
@@ -124,7 +130,7 @@ func put(tableName string, av map[string]*dynamodb.AttributeValue) error {
 	return err
 }
 
-func putToken(token string) error {
+func putToken(tokenTableName string, token string) error {
 	t := time.Now()
 	item := TokenData {
 		Token: token,
@@ -176,7 +182,7 @@ func update(tableName string, an map[string]*string, av map[string]*dynamodb.Att
 	return err
 }
 
-func updateImg(img_id int, url string, updated string) error {
+func updateImg(imgTableName string, img_id int, url string, updated string) error {
 	an := map[string]*string{
 		"#u": aws.String("url"),
 		"#d": aws.String("updated"),
@@ -216,7 +222,7 @@ func updateImg(img_id int, url string, updated string) error {
 	return nil
 }
 
-func getImgCount()(*int64, error)  {
+func getImgCount(imgTableName string)(*int64, error)  {
 	result, err := scan(imgTableName, expression.NotEqual(expression.Name("status"), expression.Value(-1)))
 	if err != nil {
 		return nil, err
@@ -224,9 +230,9 @@ func getImgCount()(*int64, error)  {
 	return result.ScannedCount, nil
 }
 
-func putImg(url string) error {
+func putImg(imgTableName string, url string) error {
 	t := time.Now()
-	count, err := getImgCount()
+	count, err := getImgCount(imgTableName)
 	if err != nil {
 		return err
 	}
@@ -247,7 +253,7 @@ func putImg(url string) error {
 	return nil
 }
 
-func checkToken(token string) bool {
+func checkToken(tokenTableName string, token string) bool {
 	item := struct {Token string `json:"token"`}{token}
 	av, err := dynamodbattribute.MarshalMap(item)
 	if err != nil {
@@ -274,7 +280,7 @@ func delete(tableName string, key map[string]*dynamodb.AttributeValue) error {
 	return err
 }
 
-func deleteToken(token string) error {
+func deleteToken(tokenTableName string, token string) error {
 	key := map[string]*dynamodb.AttributeValue{
 		"token": {
 			S: aws.String(token),
@@ -287,7 +293,7 @@ func deleteToken(token string) error {
 	return nil
 }
 
-func uploadImage(filename string, filedata string) error {
+func uploadImage(imgTableName string, bucketName string, filename string, filedata string) error {
 	t := time.Now()
 	b64data := filedata[strings.IndexByte(filedata, ',')+1:]
 	data, err := base64.StdEncoding.DecodeString(b64data)
@@ -322,7 +328,7 @@ func uploadImage(filename string, filedata string) error {
 	_, err = uploader.Upload(&s3manager.UploadInput{
 		ACL: aws.String("public-read"),
 		Bucket: aws.String(bucketName),
-		Key: aws.String(bucketPath + "/" + filename_),
+		Key: aws.String(filename_),
 		Body: bytes.NewReader(data),
 		ContentType: aws.String(contentType),
 	})
@@ -330,7 +336,7 @@ func uploadImage(filename string, filedata string) error {
 		log.Print(err)
 		return err
 	}
-	putImg("https://" + bucketName + ".s3-" + bucketRegion + ".amazonaws.com/" + bucketPath + "/" + filename_)
+	putImg(imgTableName, "https://" + bucketName + ".s3-" + bucketRegion + ".amazonaws.com/" + filename_)
 	return nil
 }
 

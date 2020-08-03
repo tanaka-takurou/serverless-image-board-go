@@ -15,7 +15,7 @@
           type="prevItem"
           class="item"
 {{ if gt $curr 1 }}
-           href="/?page={{ $prev }}"
+           href="./?page={{ $prev }}"
 {{ end }}
           >
           ⟨
@@ -38,7 +38,7 @@
 {{ end }}
 {{ if ne $curr . }}
           class="item"
-          href="/?page={{ . }}"
+          href="./?page={{ . }}"
 {{ end }}
           >
           {{ . }}
@@ -54,7 +54,7 @@
           type="nextItem"
           class="item"
 {{ if lt $curr $length }}
-          href="/?page={{ $next }}"
+          href="./?page={{ $next }}"
 {{ end }}
           >
           ⟩

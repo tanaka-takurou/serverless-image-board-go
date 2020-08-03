@@ -3,6 +3,7 @@ echo 'Updating API Lambda-Function...'
 cd `dirname $0`/../
 rm function.zip
 rm main
+zip -r9 function.zip constant
 GOOS=linux go build main.go
 zip -g function.zip main
 aws lambda update-function-code \
