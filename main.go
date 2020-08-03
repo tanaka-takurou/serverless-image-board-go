@@ -34,22 +34,16 @@ type ImgData struct {
 	Updated string `json:"updated"`
 }
 
-type TokenData struct {
-	Token     string `json:"token"`
-	Created   string `json:"created"`
-}
-
 type ConstantData struct {
-	Api       string `json:"api"`
-	Title     string `json:"title"`
-	Threshold int    `json:"threshold"`
+	Api          string `json:"api"`
+	Title        string `json:"title"`
+	Threshold    int    `json:"threshold"`
+	ImgTableName string `json:"imgTableName"`
 }
 
 type Response events.APIGatewayProxyResponse
 
-const imgTableName     string = "img"
-const tokenTableName   string = "token"
-const layout           string = "2006-01-02 15:04"
+const layout string = "2006-01-02 15:04"
 
 func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (Response, error) {
 	templates := template.New("tmp")
@@ -75,7 +69,7 @@ func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 	dat.Title = constant.Title
 	dat.ImgId = 0
 	dat.ImgPage = 1
-	dat.ImgList, err = getImgList()
+	dat.ImgList, err = getImgList(constant.ImgTableName)
 	sort.Slice(dat.ImgList, func(i, j int) bool { return dat.ImgList[i].Updated > dat.ImgList[j].Updated })
 	templates = template.Must(template.New("").Funcs(funcMap).ParseFiles("templates/index.html", "templates/view.html", "templates/header.html", "templates/footer.html", "templates/pager.html", "templates/image_list.html"))
 	if err != nil {
@@ -117,7 +111,7 @@ func scan(tableName string, filt expression.ConditionBuilder)(*dynamodb.ScanOutp
 	return svc.Scan(params)
 }
 
-func getImgList()([]ImgData, error)  {
+func getImgList(imgTableName string)([]ImgData, error)  {
 	var imgList []ImgData
 	result, err := scan(imgTableName, expression.Equal(expression.Name("status"), expression.Value(0)))
 	if err != nil {

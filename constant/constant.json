@@ -1,1 +1,1 @@
-{"title":"Sample Image Board", "threshold": 10, "api":"your_api_url"}
+{"title":"Sample Image Board", "threshold": 10, "api":"", "imgTableName":"sample_img"}
