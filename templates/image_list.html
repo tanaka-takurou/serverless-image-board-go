@@ -15,7 +15,7 @@
       </div>
     </div>
   {{ end }}
-    <div class="ui primary button" onclick="OpenModal({{ .Api }});">
+    <div class="ui primary button" onclick="OpenModal();">
       Upload
     </div>
     <div class="ui dimmer modals page transition hidden">
@@ -41,7 +41,7 @@
           <input type="hidden" name="action" value="createimg">
           <div class="actions">
             <div class="ui button" onclick="CloseModal();">Cancel</div>
-            <div class="ui green button" onclick="UploadImage(this, {{ .Api }});">Submit</div>
+            <div class="ui green button" onclick="UploadImage(this);">Submit</div>
           </div>
         </form>
       </div>

@@ -1,43 +1,13 @@
-$(document).ready(function() {
-  var
-    $headers     = $('body > div > h1'),
-    $header      = $headers.first(),
-    ignoreScroll = false,
-    timer;
-
-  $(window)
-    .on('resize', function() {
-      clearTimeout(timer);
-      $headers.visibility('disable callbacks');
-
-      $(document).scrollTop( $header.offset().top );
-
-      timer = setTimeout(function() {
-        $headers.visibility('enable callbacks');
-      }, 500);
-    });
-  $headers
-    .visibility({
-      once: false,
-      checkOnRefresh: true,
-      onTopPassed: function() {
-        $header = $(this);
-      },
-      onTopPassedReverse: function() {
-        $header = $(this);
-      }
-    });
-});
-function OpenModal(url) {
+function OpenModal() {
   $('.large.modal').modal('show');
   if (App.token.length <= 0) {
-    GetToken(url);
+    GetToken();
   }
 }
 function CloseModal() {
   $('.large.modal').modal('hide');
 }
-function GetToken(url) {
+function GetToken() {
   const data = {action: 'puttoken'};
   $.ajax({
     type:          'POST',
@@ -45,7 +15,7 @@ function GetToken(url) {
     contentType:   'application/json',
     scriptCharset: 'utf-8',
     data:          JSON.stringify(data),
-    url:           url
+    url:           App.url
   })
   .done(function(res) {
     App.token = res.token;
@@ -78,13 +48,13 @@ function onConverted () {
     $('#preview').attr('src', v);
   }
 }
-function UploadImage(elm, url) {
+function UploadImage(elm) {
   if (!!App.imgdata) {
     $(elm).addClass("disabled");
-    putImage(url);
+    putImage();
   }
 }
-function putImage(url) {
+function putImage() {
   const file = $('#image').prop('files')[0];
   const data = {action: 'uploadimg', filename: file.name, filedata: App.imgdata, token: App.token};
   $.ajax({
@@ -93,7 +63,7 @@ function putImage(url) {
     contentType:   'application/json',
     scriptCharset: 'utf-8',
     data:          JSON.stringify(data),
-    url:           url
+    url:           App.url
   })
   .fail(function(e) {
     console.log(e);
@@ -106,4 +76,4 @@ function ChangeImage () {
   const file = $('#image').prop('files')[0];
   toBase64(file).then(onConverted());
 }
-var App = { token: '', imgdata: null };
+var App = { token: '', imgdata: null, url: location.origin + {{ .ApiPath }} };
