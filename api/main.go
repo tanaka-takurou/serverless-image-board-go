@@ -39,12 +39,6 @@ type TokenResponse struct {
 	Token     string `json:"token"`
 }
 
-type ConstantData struct {
-	ImgTableName   string `json:"imgTableName"`
-	TokenTableName string `json:"tokenTableName"`
-	BucketName     string `json:"bucketName"`
-}
-
 type Response events.APIGatewayProxyResponse
 
 const layout       string = "2006-01-02 15:04"
