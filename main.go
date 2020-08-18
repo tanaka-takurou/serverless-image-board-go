@@ -2,13 +2,12 @@ package main
 
 import (
 	"io"
+	"os"
 	"log"
 	"sort"
 	"bytes"
 	"context"
-	"io/ioutil"
 	"html/template"
-	"encoding/json"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
@@ -20,7 +19,7 @@ import (
 
 type PageData struct {
 	Title string
-	Api string
+	ApiPath string
 	ImgId int
 	ImgPage int
 	PageList []int
@@ -34,16 +33,10 @@ type ImgData struct {
 	Updated string `json:"updated"`
 }
 
-type ConstantData struct {
-	Api          string `json:"api"`
-	Title        string `json:"title"`
-	Threshold    int    `json:"threshold"`
-	ImgTableName string `json:"imgTableName"`
-}
-
 type Response events.APIGatewayProxyResponse
 
 const layout string = "2006-01-02 15:04"
+const title  string = "Sample Image Board"
 
 func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (Response, error) {
 	templates := template.New("tmp")
@@ -58,18 +51,15 @@ func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 	}
 	buf := new(bytes.Buffer)
 	fw := io.Writer(buf)
-	jsonString, _ := ioutil.ReadFile("constant/constant.json")
-	constant := new(ConstantData)
-	json.Unmarshal(jsonString, constant)
-	dat.Api = constant.Api
+	dat.ApiPath = os.Getenv("API_PATH")
 	if err != nil {
 		log.Print(err)
 		panic(err)
 	}
-	dat.Title = constant.Title
+	dat.Title = title
 	dat.ImgId = 0
 	dat.ImgPage = 1
-	dat.ImgList, err = getImgList(constant.ImgTableName)
+	dat.ImgList, err = getImgList(os.Getenv("IMG_TABLE_NAME"))
 	sort.Slice(dat.ImgList, func(i, j int) bool { return dat.ImgList[i].Updated > dat.ImgList[j].Updated })
 	templates = template.Must(template.New("").Funcs(funcMap).ParseFiles("templates/index.html", "templates/view.html", "templates/header.html", "templates/footer.html", "templates/pager.html", "templates/image_list.html"))
 	if err != nil {

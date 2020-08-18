@@ -1,0 +1,129 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Serverless Img Board
+
+Parameters:
+  ApplicationName:
+    Type: String
+    Default: 'ServerlessImgBoard'
+  ImgTableName:
+    Type: String
+    Default: 'sample_img'
+    Description: (Required) The name of the new DynamoDB to store connection identifiers for each connected clients. Minimum 3 characters
+    MinLength: 3
+    MaxLength: 50
+    AllowedPattern: ^[A-Za-z_]+$
+    ConstraintDescription: 'Required. Can be characters and underscore only. No numbers or special characters allowed.'
+  TokenTableName:
+    Type: String
+    Default: 'sample_token'
+    Description: (Required) The name of the new DynamoDB to store connection identifiers for each connected clients. Minimum 3 characters
+    MinLength: 3
+    MaxLength: 50
+    AllowedPattern: ^[A-Za-z_]+$
+    ConstraintDescription: 'Required. Can be characters and underscore only. No numbers or special characters allowed.'
+  FrontPageApiStageName:
+    Type: String
+    Default: 'ProdStage'
+
+Resources:
+  FrontPageApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: ServerlessImgBoardApi
+      EndpointConfiguration: REGIONAL
+      StageName: !Ref FrontPageApiStageName
+  ImgBucket:
+    Type: AWS::S3::Bucket
+  FrontPageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ServerlessImgBoardFrontFunction
+      CodeUri: bin/
+      Handler: main
+      MemorySize: 256
+      Runtime: go1.x
+      Description: 'Test Front Function'
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName: !Ref ImgTableName
+      - DynamoDBCrudPolicy:
+          TableName: !Ref TokenTableName
+      Environment:
+        Variables:
+          IMG_TABLE_NAME: !Ref ImgTableName
+          TOKEN_TABLE_NAME: !Ref TokenTableName
+          BUCKET_NAME: !Ref 'ImgBucket'
+          REGION: !Ref 'AWS::Region'
+          API_PATH: !Join [ '', [ '/', !Ref FrontPageApiStageName, '/api'] ]
+      Events:
+        FrontPageApi:
+          Type: Api
+          Properties:
+            Path: '/'
+            Method: get
+            RestApiId: !Ref FrontPageApi
+  ImgFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ServerlessImgBoardApiFunction
+      CodeUri: api/bin/
+      Handler: main
+      MemorySize: 256
+      Runtime: go1.x
+      Description: 'Test Img Function'
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName: !Ref ImgTableName
+      - DynamoDBCrudPolicy:
+          TableName: !Ref TokenTableName
+      - S3CrudPolicy:
+          BucketName: !Ref ImgBucket
+      Environment:
+        Variables:
+          IMG_TABLE_NAME: !Ref ImgTableName
+          TOKEN_TABLE_NAME: !Ref TokenTableName
+          BUCKET_NAME: !Ref 'ImgBucket'
+          REGION: !Ref 'AWS::Region'
+      Events:
+        FrontPageApi:
+          Type: Api
+          Properties:
+            Path: '/api'
+            Method: post
+            RestApiId: !Ref FrontPageApi
+  ImgTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+      - AttributeName: "img_id"
+        AttributeType: "N"
+      KeySchema:
+      - AttributeName: "img_id"
+        KeyType: "HASH"
+      ProvisionedThroughput:
+        ReadCapacityUnits: 3
+        WriteCapacityUnits: 3
+      SSESpecification:
+        SSEEnabled: False
+      TableName: !Ref ImgTableName
+  TokenTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+      - AttributeName: "token"
+        AttributeType: "S"
+      KeySchema:
+      - AttributeName: "token"
+        KeyType: "HASH"
+      ProvisionedThroughput:
+        ReadCapacityUnits: 3
+        WriteCapacityUnits: 3
+      SSESpecification:
+        SSEEnabled: False
+      TableName: !Ref TokenTableName
+
+Outputs:
+  APIURI:
+    Description: "URI"
+    Value: !Join [ '', [ 'https://', !Ref FrontPageApi, '.execute-api.',!Ref 'AWS::Region','.amazonaws.com/',!Ref FrontPageApiStageName,'/'] ]

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"log"
 	"time"
 	"bytes"
@@ -8,7 +9,6 @@ import (
 	"strings"
 	"strconv"
 	"context"
-	"io/ioutil"
 	"path/filepath"
 	"encoding/json"
 	"encoding/base64"
@@ -39,15 +39,8 @@ type TokenResponse struct {
 	Token     string `json:"token"`
 }
 
-type ConstantData struct {
-	ImgTableName   string `json:"imgTableName"`
-	TokenTableName string `json:"tokenTableName"`
-	BucketName     string `json:"bucketName"`
-}
-
 type Response events.APIGatewayProxyResponse
 
-const bucketRegion string = "ap-northeast-1"
 const layout       string = "2006-01-02 15:04"
 const layout2      string = "20060102150405"
 
@@ -56,19 +49,16 @@ func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 	var err error
 	d := make(map[string]string)
 	json.Unmarshal([]byte(request.Body), &d)
-	jsonString, _ := ioutil.ReadFile("constant/constant.json")
-	constant := new(ConstantData)
-	json.Unmarshal(jsonString, constant)
 	if v, ok := d["action"]; ok {
 		switch v {
 		case "uploadimg" :
 			log.Print("Upload Img.")
 			if t, ok := d["token"]; ok {
-				if checkToken(constant.TokenTableName, t) {
+				if checkToken(os.Getenv("TOKEN_TABLE_NAME"), t) {
 					if v, ok := d["filename"]; ok {
 						if w, ok := d["filedata"]; ok {
-							err = uploadImage(constant.ImgTableName, constant.BucketName, v, w)
-							deleteToken(constant.TokenTableName, t)
+							err = uploadImage(os.Getenv("IMG_TABLE_NAME"), os.Getenv("BUCKET_NAME"), v, w)
+							deleteToken(os.Getenv("TOKEN_TABLE_NAME"), t)
 						}
 					}
 				}
@@ -76,7 +66,7 @@ func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 		case "puttoken" :
 			hash, err := bcrypt.GenerateFromPassword([]byte("salt2"), bcrypt.DefaultCost)
 			if err == nil {
-				err = putToken(constant.TokenTableName, string(hash))
+				err = putToken(os.Getenv("TOKEN_TABLE_NAME"), string(hash))
 				if err == nil {
 					jsonBytes, err = json.Marshal(TokenResponse{Token:string(hash)})
 				}
@@ -317,7 +307,7 @@ func uploadImage(imgTableName string, bucketName string, filename string, fileda
 		return errors.New("this extension is invalid")
 	}
 	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(bucketRegion)},
+		Region: aws.String(os.Getenv("REGION"))},
 	)
 	if err != nil {
 		log.Print(err)
@@ -336,7 +326,7 @@ func uploadImage(imgTableName string, bucketName string, filename string, fileda
 		log.Print(err)
 		return err
 	}
-	putImg(imgTableName, "https://" + bucketName + ".s3-" + bucketRegion + ".amazonaws.com/" + filename_)
+	putImg(imgTableName, "https://" + bucketName + ".s3-" + os.Getenv("REGION") + ".amazonaws.com/" + filename_)
 	return nil
 }
 
