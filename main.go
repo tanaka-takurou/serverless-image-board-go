@@ -8,13 +8,14 @@ import (
 	"bytes"
 	"context"
 	"html/template"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
-	"github.com/aws/aws-sdk-go/service/dynamodb/expression"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/external"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/expression"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/dynamodbattribute"
 )
 
 type PageData struct {
@@ -34,6 +35,9 @@ type ImgData struct {
 }
 
 type Response events.APIGatewayProxyResponse
+
+var cfg aws.Config
+var dynamodbClient *dynamodb.Client
 
 const layout string = "2006-01-02 15:04"
 const title  string = "Sample Image Board"
@@ -59,7 +63,7 @@ func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 	dat.Title = title
 	dat.ImgId = 0
 	dat.ImgPage = 1
-	dat.ImgList, err = getImgList(os.Getenv("IMG_TABLE_NAME"))
+	dat.ImgList, err = getImgList(ctx, os.Getenv("IMG_TABLE_NAME"))
 	sort.Slice(dat.ImgList, func(i, j int) bool { return dat.ImgList[i].Updated > dat.ImgList[j].Updated })
 	templates = template.Must(template.New("").Funcs(funcMap).ParseFiles("templates/index.html", "templates/view.html", "templates/header.html", "templates/footer.html", "templates/pager.html", "templates/image_list.html"))
 	if err != nil {
@@ -82,28 +86,29 @@ func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 	return res, nil
 }
 
-func scan(tableName string, filt expression.ConditionBuilder)(*dynamodb.ScanOutput, error)  {
-	sess := session.Must(session.NewSessionWithOptions(session.Options{
-		SharedConfigState: session.SharedConfigEnable,
-	}))
-	svc := dynamodb.New(sess)
+func scan(ctx context.Context, tableName string, filt expression.ConditionBuilder)(*dynamodb.ScanOutput, error)  {
+	if dynamodbClient == nil {
+		dynamodbClient = dynamodb.New(cfg)
+	}
 	expr, err := expression.NewBuilder().WithFilter(filt).Build()
 	if err != nil {
 		return nil, err
 	}
-	params := &dynamodb.ScanInput{
+	input := &dynamodb.ScanInput{
 		ExpressionAttributeNames:  expr.Names(),
 		ExpressionAttributeValues: expr.Values(),
 		FilterExpression:          expr.Filter(),
 		ProjectionExpression:      expr.Projection(),
 		TableName:                 aws.String(tableName),
 	}
-	return svc.Scan(params)
+	req := dynamodbClient.ScanRequest(input)
+	res, err := req.Send(ctx)
+	return res.ScanOutput, err
 }
 
-func getImgList(imgTableName string)([]ImgData, error)  {
+func getImgList(ctx context.Context, imgTableName string)([]ImgData, error)  {
 	var imgList []ImgData
-	result, err := scan(imgTableName, expression.Equal(expression.Name("status"), expression.Value(0)))
+	result, err := scan(ctx, imgTableName, expression.Equal(expression.Name("status"), expression.Value(0)))
 	if err != nil {
 		return nil, err
 	}
@@ -116,6 +121,15 @@ func getImgList(imgTableName string)([]ImgData, error)  {
 		imgList = append(imgList, item)
 	}
 	return imgList, nil
+}
+
+func init() {
+	var err error
+	cfg, err = external.LoadDefaultAWSConfig()
+	cfg.Region = os.Getenv("REGION")
+	if err != nil {
+		log.Print(err)
+	}
 }
 
 func main() {
