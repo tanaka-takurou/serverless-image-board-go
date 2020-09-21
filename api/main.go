@@ -7,20 +7,21 @@ import (
 	"bytes"
 	"errors"
 	"strings"
-	"strconv"
 	"context"
 	"path/filepath"
 	"encoding/json"
 	"encoding/base64"
 	"golang.org/x/crypto/bcrypt"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
-	"github.com/aws/aws-sdk-go/service/dynamodb/expression"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/external"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/expression"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/dynamodbattribute"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/s3manager"
 )
 
 type ImgData struct {
@@ -41,6 +42,9 @@ type TokenResponse struct {
 
 type Response events.APIGatewayProxyResponse
 
+var cfg aws.Config
+var dynamodbClient *dynamodb.Client
+
 const layout       string = "2006-01-02 15:04"
 const layout2      string = "20060102150405"
 
@@ -54,11 +58,11 @@ func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 		case "uploadimg" :
 			log.Print("Upload Img.")
 			if t, ok := d["token"]; ok {
-				if checkToken(os.Getenv("TOKEN_TABLE_NAME"), t) {
+				if checkToken(ctx, os.Getenv("TOKEN_TABLE_NAME"), t) {
 					if v, ok := d["filename"]; ok {
 						if w, ok := d["filedata"]; ok {
-							err = uploadImage(os.Getenv("IMG_TABLE_NAME"), os.Getenv("BUCKET_NAME"), v, w)
-							deleteToken(os.Getenv("TOKEN_TABLE_NAME"), t)
+							err = uploadImage(ctx, os.Getenv("IMG_TABLE_NAME"), os.Getenv("BUCKET_NAME"), v, w)
+							deleteToken(ctx, os.Getenv("TOKEN_TABLE_NAME"), t)
 						}
 					}
 				}
@@ -66,7 +70,7 @@ func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 		case "puttoken" :
 			hash, err := bcrypt.GenerateFromPassword([]byte("salt2"), bcrypt.DefaultCost)
 			if err == nil {
-				err = putToken(os.Getenv("TOKEN_TABLE_NAME"), string(hash))
+				err = putToken(ctx, os.Getenv("TOKEN_TABLE_NAME"), string(hash))
 				if err == nil {
 					jsonBytes, err = json.Marshal(TokenResponse{Token:string(hash)})
 				}
@@ -88,39 +92,40 @@ func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 	}, nil
 }
 
-func scan(tableName string, filt expression.ConditionBuilder)(*dynamodb.ScanOutput, error)  {
-	sess := session.Must(session.NewSessionWithOptions(session.Options{
-		SharedConfigState: session.SharedConfigEnable,
-	}))
-	svc := dynamodb.New(sess)
+func scan(ctx context.Context, tableName string, filt expression.ConditionBuilder)(*dynamodb.ScanOutput, error)  {
+	if dynamodbClient == nil {
+		dynamodbClient = dynamodb.New(cfg)
+	}
 	expr, err := expression.NewBuilder().WithFilter(filt).Build()
 	if err != nil {
 		return nil, err
 	}
-	params := &dynamodb.ScanInput{
+	input := &dynamodb.ScanInput{
 		ExpressionAttributeNames:  expr.Names(),
 		ExpressionAttributeValues: expr.Values(),
 		FilterExpression:          expr.Filter(),
 		ProjectionExpression:      expr.Projection(),
 		TableName:                 aws.String(tableName),
 	}
-	return svc.Scan(params)
+	req := dynamodbClient.ScanRequest(input)
+	res, err := req.Send(ctx)
+	return res.ScanOutput, err
 }
 
-func put(tableName string, av map[string]*dynamodb.AttributeValue) error {
-	sess := session.Must(session.NewSessionWithOptions(session.Options{
-		SharedConfigState: session.SharedConfigEnable,
-	}))
-	svc := dynamodb.New(sess)
+func put(ctx context.Context, tableName string, av map[string]dynamodb.AttributeValue) error {
+	if dynamodbClient == nil {
+		dynamodbClient = dynamodb.New(cfg)
+	}
 	input := &dynamodb.PutItemInput{
 		Item:      av,
 		TableName: aws.String(tableName),
 	}
-	_, err := svc.PutItem(input)
+	req := dynamodbClient.PutItemRequest(input)
+	_, err := req.Send(ctx)
 	return err
 }
 
-func putToken(tokenTableName string, token string) error {
+func putToken(ctx context.Context, tokenTableName string, token string) error {
 	t := time.Now()
 	item := TokenData {
 		Token: token,
@@ -130,99 +135,40 @@ func putToken(tokenTableName string, token string) error {
 	if err != nil {
 		return err
 	}
-	err = put(tokenTableName, av)
+	err = put(ctx, tokenTableName, av)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func get(tableName string, key map[string]*dynamodb.AttributeValue, att string)(*dynamodb.GetItemOutput, error) {
-	sess := session.Must(session.NewSessionWithOptions(session.Options{
-		SharedConfigState: session.SharedConfigEnable,
-	}))
-	svc := dynamodb.New(sess)
+func get(ctx context.Context, tableName string, key map[string]dynamodb.AttributeValue, att string)(*dynamodb.GetItemOutput, error) {
+	if dynamodbClient == nil {
+		dynamodbClient = dynamodb.New(cfg)
+	}
 	input := &dynamodb.GetItemInput{
 		TableName: aws.String(tableName),
 		Key: key,
-		AttributesToGet: []*string{
-			aws.String(att),
-		},
+		AttributesToGet: []string{att},
 		ConsistentRead: aws.Bool(true),
-		ReturnConsumedCapacity: aws.String("NONE"),
+		ReturnConsumedCapacity: dynamodb.ReturnConsumedCapacityNone,
 	}
-	return svc.GetItem(input)
+	req := dynamodbClient.GetItemRequest(input)
+	res, err := req.Send(ctx)
+	return res.GetItemOutput, err
 }
 
-func update(tableName string, an map[string]*string, av map[string]*dynamodb.AttributeValue, key map[string]*dynamodb.AttributeValue, updateExpression string) error {
-	sess := session.Must(session.NewSessionWithOptions(session.Options{
-		SharedConfigState: session.SharedConfigEnable,
-	}))
-	svc := dynamodb.New(sess)
-	input := &dynamodb.UpdateItemInput{
-		ExpressionAttributeNames: an,
-		ExpressionAttributeValues: av,
-		TableName: aws.String(tableName),
-		Key: key,
-		ReturnValues:     aws.String("UPDATED_NEW"),
-		UpdateExpression: aws.String(updateExpression),
-	}
-
-	_, err := svc.UpdateItem(input)
-	return err
-}
-
-func updateImg(imgTableName string, img_id int, url string, updated string) error {
-	an := map[string]*string{
-		"#u": aws.String("url"),
-		"#d": aws.String("updated"),
-	}
-	av := map[string]*dynamodb.AttributeValue{
-		":u": {
-			S: aws.String(url),
-		},
-		":d": {
-			S: aws.String(updated),
-		},
-	}
-	key := map[string]*dynamodb.AttributeValue{
-		"img_id": {
-			N: aws.String(strconv.Itoa(img_id)),
-		},
-	}
-	updateExpression := "set #u = :u, #d = :d"
-
-	sess := session.Must(session.NewSessionWithOptions(session.Options{
-		SharedConfigState: session.SharedConfigEnable,
-	}))
-	svc := dynamodb.New(sess)
-	input := &dynamodb.UpdateItemInput{
-		ExpressionAttributeNames: an,
-		ExpressionAttributeValues: av,
-		TableName: aws.String(imgTableName),
-		Key: key,
-		ReturnValues:     aws.String("UPDATED_NEW"),
-		UpdateExpression: aws.String(updateExpression),
-	}
-
-	_, err := svc.UpdateItem(input)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func getImgCount(imgTableName string)(*int64, error)  {
-	result, err := scan(imgTableName, expression.NotEqual(expression.Name("status"), expression.Value(-1)))
+func getImgCount(ctx context.Context, imgTableName string)(*int64, error)  {
+	result, err := scan(ctx, imgTableName, expression.NotEqual(expression.Name("status"), expression.Value(-1)))
 	if err != nil {
 		return nil, err
 	}
 	return result.ScannedCount, nil
 }
 
-func putImg(imgTableName string, url string) error {
+func putImg(ctx context.Context, imgTableName string, url string) error {
 	t := time.Now()
-	count, err := getImgCount(imgTableName)
+	count, err := getImgCount(ctx, imgTableName)
 	if err != nil {
 		return err
 	}
@@ -236,54 +182,54 @@ func putImg(imgTableName string, url string) error {
 	if err != nil {
 		return err
 	}
-	err = put(imgTableName, av)
+	err = put(ctx, imgTableName, av)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func checkToken(tokenTableName string, token string) bool {
+func checkToken(ctx context.Context, tokenTableName string, token string) bool {
 	item := struct {Token string `json:"token"`}{token}
 	av, err := dynamodbattribute.MarshalMap(item)
 	if err != nil {
 		return false
 	}
-	res, err := get(tokenTableName, av, "token")
+	res, err := get(ctx, tokenTableName, av, "token")
 	if err == nil && res.Item != nil{
 		return true
 	}
 	return false
 }
 
-func delete(tableName string, key map[string]*dynamodb.AttributeValue) error {
-	sess := session.Must(session.NewSessionWithOptions(session.Options{
-		SharedConfigState: session.SharedConfigEnable,
-	}))
-	svc := dynamodb.New(sess)
+func delete(ctx context.Context, tableName string, key map[string]dynamodb.AttributeValue) error {
+	if dynamodbClient == nil {
+		dynamodbClient = dynamodb.New(cfg)
+	}
 	input := &dynamodb.DeleteItemInput{
 		TableName: aws.String(tableName),
 		Key: key,
 	}
 
-	_, err := svc.DeleteItem(input)
+	req := dynamodbClient.DeleteItemRequest(input)
+	_, err := req.Send(ctx)
 	return err
 }
 
-func deleteToken(tokenTableName string, token string) error {
-	key := map[string]*dynamodb.AttributeValue{
+func deleteToken(ctx context.Context, tokenTableName string, token string) error {
+	key := map[string]dynamodb.AttributeValue{
 		"token": {
 			S: aws.String(token),
 		},
 	}
-	err := delete(tokenTableName, key)
+	err := delete(ctx, tokenTableName, key)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func uploadImage(imgTableName string, bucketName string, filename string, filedata string) error {
+func uploadImage(ctx context.Context, imgTableName string, bucketName string, filename string, filedata string) error {
 	t := time.Now()
 	b64data := filedata[strings.IndexByte(filedata, ',')+1:]
 	data, err := base64.StdEncoding.DecodeString(b64data)
@@ -306,17 +252,10 @@ func uploadImage(imgTableName string, bucketName string, filename string, fileda
 	default:
 		return errors.New("this extension is invalid")
 	}
-	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(os.Getenv("REGION"))},
-	)
-	if err != nil {
-		log.Print(err)
-		return err
-	}
 	filename_ := string([]rune(filename)[:(len(filename) - len(extension))]) + t.Format(layout2) + extension
-	uploader := s3manager.NewUploader(sess)
+	uploader := s3manager.NewUploader(cfg)
 	_, err = uploader.Upload(&s3manager.UploadInput{
-		ACL: aws.String("public-read"),
+		ACL: s3.ObjectCannedACLPublicRead,
 		Bucket: aws.String(bucketName),
 		Key: aws.String(filename_),
 		Body: bytes.NewReader(data),
@@ -326,8 +265,17 @@ func uploadImage(imgTableName string, bucketName string, filename string, fileda
 		log.Print(err)
 		return err
 	}
-	putImg(imgTableName, "https://" + bucketName + ".s3-" + os.Getenv("REGION") + ".amazonaws.com/" + filename_)
+	putImg(ctx, imgTableName, "https://" + bucketName + ".s3-" + os.Getenv("REGION") + ".amazonaws.com/" + filename_)
 	return nil
+}
+
+func init() {
+	var err error
+	cfg, err = external.LoadDefaultAWSConfig()
+	cfg.Region = os.Getenv("REGION")
+	if err != nil {
+		log.Print(err)
+	}
 }
 
 func main() {

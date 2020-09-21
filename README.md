@@ -4,7 +4,7 @@ Simple kit for serverless image board using AWS Lambda.
 
 ## Dependence
 - aws-lambda-go
-- aws-sdk-go
+- aws-sdk-go-v2
 
 
 ## Requirements
