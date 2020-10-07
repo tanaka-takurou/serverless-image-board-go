@@ -86,11 +86,11 @@ func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 	return res, nil
 }
 
-func scan(ctx context.Context, tableName string, filt expression.ConditionBuilder)(*dynamodb.ScanOutput, error)  {
+func scan(ctx context.Context, tableName string, filt expression.ConditionBuilder, proj expression.ProjectionBuilder)(*dynamodb.ScanOutput, error)  {
 	if dynamodbClient == nil {
 		dynamodbClient = dynamodb.New(cfg)
 	}
-	expr, err := expression.NewBuilder().WithFilter(filt).Build()
+	expr, err := expression.NewBuilder().WithFilter(filt).WithProjection(proj).Build()
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +108,9 @@ func scan(ctx context.Context, tableName string, filt expression.ConditionBuilde
 
 func getImgList(ctx context.Context, imgTableName string)([]ImgData, error)  {
 	var imgList []ImgData
-	result, err := scan(ctx, imgTableName, expression.Equal(expression.Name("status"), expression.Value(0)))
+	filt := expression.Equal(expression.Name("status"), expression.Value(0))
+	proj := expression.NamesList(expression.Name("img_id"), expression.Name("status"), expression.Name("url"), expression.Name("updated"))
+	result, err := scan(ctx, imgTableName, filt, proj)
 	if err != nil {
 		return nil, err
 	}
