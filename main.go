@@ -12,10 +12,10 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/aws/external"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb/expression"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb/dynamodbattribute"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 )
 
 type PageData struct {
@@ -28,15 +28,14 @@ type PageData struct {
 }
 
 type ImgData struct {
-	Img_Id  int    `json:"img_id"`
-	Status  int    `json:"status"`
-	Url     string `json:"url"`
-	Updated string `json:"updated"`
+	Img_Id  int    `dynamodbav:"img_id"`
+	Status  int    `dynamodbav:"status"`
+	Url     string `dynamodbav:"url"`
+	Updated string `dynamodbav:"updated"`
 }
 
 type Response events.APIGatewayProxyResponse
 
-var cfg aws.Config
 var dynamodbClient *dynamodb.Client
 
 const layout string = "2006-01-02 15:04"
@@ -88,7 +87,7 @@ func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 
 func scan(ctx context.Context, tableName string, filt expression.ConditionBuilder, proj expression.ProjectionBuilder)(*dynamodb.ScanOutput, error)  {
 	if dynamodbClient == nil {
-		dynamodbClient = dynamodb.New(cfg)
+		dynamodbClient = dynamodb.NewFromConfig(getConfig(ctx))
 	}
 	expr, err := expression.NewBuilder().WithFilter(filt).WithProjection(proj).Build()
 	if err != nil {
@@ -101,9 +100,8 @@ func scan(ctx context.Context, tableName string, filt expression.ConditionBuilde
 		ProjectionExpression:      expr.Projection(),
 		TableName:                 aws.String(tableName),
 	}
-	req := dynamodbClient.ScanRequest(input)
-	res, err := req.Send(ctx)
-	return res.ScanOutput, err
+	res, err := dynamodbClient.Scan(ctx, input)
+	return res, err
 }
 
 func getImgList(ctx context.Context, imgTableName string)([]ImgData, error)  {
@@ -116,7 +114,7 @@ func getImgList(ctx context.Context, imgTableName string)([]ImgData, error)  {
 	}
 	for _, i := range result.Items {
 		item := ImgData{}
-		err = dynamodbattribute.UnmarshalMap(i, &item)
+		err = attributevalue.UnmarshalMap(i, &item)
 		if err != nil {
 			return nil, err
 		}
@@ -125,13 +123,13 @@ func getImgList(ctx context.Context, imgTableName string)([]ImgData, error)  {
 	return imgList, nil
 }
 
-func init() {
+func getConfig(ctx context.Context) aws.Config {
 	var err error
-	cfg, err = external.LoadDefaultAWSConfig()
-	cfg.Region = os.Getenv("REGION")
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(os.Getenv("REGION")))
 	if err != nil {
 		log.Print(err)
 	}
+	return cfg
 }
 
 func main() {
