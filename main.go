@@ -6,6 +6,7 @@ import (
 	"log"
 	"sort"
 	"bytes"
+	"embed"
 	"context"
 	"html/template"
 	"github.com/aws/aws-lambda-go/events"
@@ -36,6 +37,9 @@ type ImgData struct {
 
 type Response events.APIGatewayProxyResponse
 
+//go:embed templates
+var templateFS embed.FS
+
 var dynamodbClient *dynamodb.Client
 
 const layout string = "2006-01-02 15:04"
@@ -64,7 +68,7 @@ func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 	dat.ImgPage = 1
 	dat.ImgList, err = getImgList(ctx, os.Getenv("IMG_TABLE_NAME"))
 	sort.Slice(dat.ImgList, func(i, j int) bool { return dat.ImgList[i].Updated > dat.ImgList[j].Updated })
-	templates = template.Must(template.New("").Funcs(funcMap).ParseFiles("templates/index.html", "templates/view.html", "templates/header.html", "templates/footer.html", "templates/pager.html", "templates/image_list.html"))
+	templates = template.Must(template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/index.html", "templates/view.html", "templates/header.html", "templates/footer.html", "templates/pager.html", "templates/image_list.html"))
 	if err != nil {
 		log.Print(err)
 		panic(err)
