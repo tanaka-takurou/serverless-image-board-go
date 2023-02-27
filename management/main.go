@@ -3,7 +3,8 @@ package main
 import (
 	"log"
 	"net/http"
-	"./controller"
+
+	"github.com/tanaka-takurou/serverless-image-board-go/management/controller"
 )
 
 func main() {
