@@ -12,7 +12,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.11.55
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.18.5
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.30.5
-	golang.org/x/crypto v0.6.0
+	golang.org/x/crypto v0.17.0
 )
 
 require (
