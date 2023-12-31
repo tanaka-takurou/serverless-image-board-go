@@ -25,9 +25,9 @@ echo 'Create Lambda-Function...'
 cd `dirname $0`/../
 aws lambda create-function \
 	--function-name $FUNCTION_NAME \
-	--runtime go1.x \
+	--runtime provided.al2 \
 	--role $ROLE_ARN \
-	--handler main \
+	--handler bootstrap \
 	--zip-file fileb://`pwd`/function.zip \
 	--region $REGION > tmp.txt
 TMP_ARN=$(jq .FunctionArn tmp.txt)
