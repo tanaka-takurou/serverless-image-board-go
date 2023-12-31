@@ -2,10 +2,10 @@
 echo 'Updating API Lambda-Function...'
 cd `dirname $0`/../
 rm function.zip
-rm main
+rm bootstrap
 zip -r9 function.zip constant
-GOOS=linux go build main.go
-zip -g function.zip main
+GOARCH=arm64 GOOS=linux CGO_ENABLED=0 go build -o bootstrap main.go
+zip -g function.zip bootstrap
 aws lambda update-function-code \
 	--profile default \
 	--function-name your_api_function_name \

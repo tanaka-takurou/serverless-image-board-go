@@ -28,14 +28,14 @@ echo "{\"imgTableName\":\"$IMG_TABLE_NAME\", \"tokenTableName\":\"$TOKEN_TABLE_N
 
 echo 'Create API Lambda-Function...'
 rm function.zip
-rm main
+rm bootstrap
 zip -r9 function.zip constant
-GOOS=linux go build main.go
-zip -g function.zip main
+GOARCH=arm64 GOOS=linux CGO_ENABLED=0 go build -o bootstrap main.go
+zip -g function.zip bootstrap
 aws lambda create-function \
 	--function-name $API_FUNCTION_NAME \
-	--runtime go1.x \
+	--runtime provided.al2 \
 	--role $API_ROLE_ARN \
-	--handler main \
+	--handler bootstrap \
 	--zip-file fileb://`pwd`/function.zip \
 	--region $REGION > tmp.txt
